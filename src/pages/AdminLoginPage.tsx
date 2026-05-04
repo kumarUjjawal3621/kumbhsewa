@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { auth } from '../lib/firebase';
 import { Loader2, Shield } from 'lucide-react';
 
 export default function AdminLoginPage() {
@@ -13,12 +14,8 @@ export default function AdminLoginPage() {
     setLoading(true);
     setError('');
     try {
-      const { error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      if (authError) throw authError;
-    } catch {
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (err: any) {
       setError('Invalid credentials. Please try again.');
     } finally {
       setLoading(false);

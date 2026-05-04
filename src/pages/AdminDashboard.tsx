@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { auth } from '../lib/firebase';
 import { getContributors, getPledgeAnalytics } from '../lib/firestore';
 import { contributionIntents } from '../data/contributionIntents';
 import { pledgeCategories } from '../data/pledgeCategories';
@@ -34,14 +35,14 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<'contributors' | 'analytics'>('contributors');
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (!user) {
         navigate('/admin', { replace: true });
       } else {
         loadData();
       }
     });
-    return () => subscription.unsubscribe();
+    return () => unsubscribe();
   }, [navigate]);
 
   const loadData = async () => {
@@ -60,7 +61,7 @@ export default function AdminDashboard() {
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await signOut(auth);
     navigate('/admin');
   };
 

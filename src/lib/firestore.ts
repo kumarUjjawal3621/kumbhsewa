@@ -1,4 +1,16 @@
-import { supabase } from './supabase';
+import {
+  collection,
+  addDoc,
+  query,
+  orderBy,
+  getDocs,
+  doc,
+  getDoc,
+  updateDoc,
+  increment,
+  serverTimestamp,
+} from 'firebase/firestore';
+import { db } from './firebase';
 
 export async function submitContributor(data: {
   fullName: string;
@@ -8,73 +20,79 @@ export async function submitContributor(data: {
   preferredLanguage: string;
   intents: string[];
 }) {
-  const { error } = await supabase.from('contributors').insert({
-    full_name: data.fullName,
-    email: data.email,
-    whatsapp_number: data.whatsappNumber,
-    pin_code: data.pinCode,
-    preferred_language: data.preferredLanguage,
-    intents: data.intents,
-  });
-  if (error) throw error;
+  try {
+    const contributorsRef = collection(db, 'contributors');
+    await addDoc(contributorsRef, {
+      full_name: data.fullName,
+      email: data.email,
+      whatsapp_number: data.whatsappNumber,
+      pin_code: data.pinCode,
+      preferred_language: data.preferredLanguage,
+      intents: data.intents,
+      created_at: serverTimestamp(),
+    });
+  } catch (error) {
+    throw error;
+  }
 }
 
 export async function incrementPledgeCount(categoryId: string) {
-  // Try to update existing record
-  const { data: existing } = await supabase
-    .from('pledge_analytics')
-    .select('count')
-    .eq('id', categoryId)
-    .maybeSingle();
+  try {
+    const analyticsRef = doc(db, 'pledge_analytics', categoryId);
+    const analyticsDoc = await getDoc(analyticsRef);
 
-  if (existing) {
-    const { error } = await supabase
-      .from('pledge_analytics')
-      .update({
-        count: existing.count + 1,
-        last_pledged_at: new Date().toISOString(),
-      })
-      .eq('id', categoryId);
-    if (error) throw error;
-  } else {
-    const { error } = await supabase.from('pledge_analytics').insert({
-      id: categoryId,
-      category: categoryId,
-      count: 1,
-      last_pledged_at: new Date().toISOString(),
-    });
-    if (error) throw error;
+    if (analyticsDoc.exists()) {
+      await updateDoc(analyticsRef, {
+        count: increment(1),
+        last_pledged_at: serverTimestamp(),
+      });
+    } else {
+      await addDoc(collection(db, 'pledge_analytics'), {
+        id: categoryId,
+        category: categoryId,
+        count: 1,
+        last_pledged_at: serverTimestamp(),
+      });
+    }
+  } catch (error) {
+    throw error;
   }
 }
 
 export async function getContributors() {
-  const { data, error } = await supabase
-    .from('contributors')
-    .select('*')
-    .order('created_at', { ascending: false });
-  if (error) throw error;
-  return (data || []).map((row) => ({
-    id: row.id,
-    fullName: row.full_name,
-    email: row.email,
-    whatsappNumber: row.whatsapp_number,
-    pinCode: row.pin_code,
-    preferredLanguage: row.preferred_language,
-    intents: row.intents || [],
-    createdAt: row.created_at,
-  }));
+  try {
+    const contributorsRef = collection(db, 'contributors');
+    const q = query(contributorsRef, orderBy('created_at', 'desc'));
+    const querySnapshot = await getDocs(q);
+
+    return querySnapshot.docs.map((doc) => ({
+      id: doc.id,
+      fullName: doc.data().full_name,
+      email: doc.data().email,
+      whatsappNumber: doc.data().whatsapp_number,
+      pinCode: doc.data().pin_code,
+      preferredLanguage: doc.data().preferred_language,
+      intents: doc.data().intents || [],
+      createdAt: doc.data().created_at?.toDate?.().toISOString() || '',
+    }));
+  } catch (error) {
+    throw error;
+  }
 }
 
 export async function getPledgeAnalytics() {
-  const { data, error } = await supabase
-    .from('pledge_analytics')
-    .select('*')
-    .order('count', { ascending: false });
-  if (error) throw error;
-  return (data || []).map((row) => ({
-    id: row.id,
-    category: row.category,
-    count: row.count || 0,
-    lastPledgedAt: row.last_pledged_at,
-  }));
+  try {
+    const analyticsRef = collection(db, 'pledge_analytics');
+    const q = query(analyticsRef, orderBy('count', 'desc'));
+    const querySnapshot = await getDocs(q);
+
+    return querySnapshot.docs.map((doc) => ({
+      id: doc.id,
+      category: doc.data().category,
+      count: doc.data().count || 0,
+      lastPledgedAt: doc.data().last_pledged_at?.toDate?.().toISOString() || '',
+    }));
+  } catch (error) {
+    throw error;
+  }
 }
